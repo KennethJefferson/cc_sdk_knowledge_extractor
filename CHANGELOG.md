@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `sop-generator` skill - Generate Standard Operating Procedures from course content
+  - Activation phrases: `SOP`, `sop`, `procedure`, `procedures`, `standard-operating-procedure`
+  - Outputs: README index, individual SOP files, quick reference checklists, glossary
+  - Extracts procedures using action verbs and step patterns
+  - Standard SOP format with purpose, scope, prerequisites, steps, verification
+
 ## [0.1.0] - 2026-01-09
 
 ### Added

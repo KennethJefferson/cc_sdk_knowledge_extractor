@@ -60,6 +60,7 @@ export class SkillInvoker {
       "archive-extractor": "archive_extract.py",
       "quiz-generator": "quiz_generate.py",
       "summary-generator": "summary_generate.py",
+      "sop-generator": "sop_generate.py",
       "db-identify": "db_identify.py",
       "db-router": "db_route.py",
       "db-extractor-sqlite": "db_extract.py",

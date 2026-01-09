@@ -81,8 +81,11 @@ export const GENERATOR_SKILLS: Record<string, string> = {
   summary: "summary-generator",
   docs: "summary-generator",
   documentation: "summary-generator",
+  sop: "sop-generator",
+  procedure: "sop-generator",
+  procedures: "sop-generator",
+  "standard-operating-procedure": "sop-generator",
   // Future generators can be added here
-  // sop: "sop-generator",
   // podcast: "podcast-generator",
   // tutorial: "tutorial-generator",
 };
