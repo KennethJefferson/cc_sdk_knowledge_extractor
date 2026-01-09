@@ -1,0 +1,27 @@
+{
+  "name": "ccknowledgeextractor",
+  "version": "0.1.0",
+  "description": "Extract course content and generate quizzes/exams using Claude Agent SDK",
+  "module": "src/index.ts",
+  "type": "module",
+  "private": true,
+  "bin": {
+    "ccke": "./src/index.ts"
+  },
+  "scripts": {
+    "start": "bun run src/index.ts",
+    "dev": "bun --watch run src/index.ts",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.1.0",
+    "commander": "^12.1.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/node": "^22.0.0"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  }
+}

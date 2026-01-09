@@ -1,0 +1,90 @@
+Alright, I think we're ready to being creating our application.
+
+This application will be implmented in Bun/TS, and will use the Claude Agent SDK as well as claude skills and perhaps subagents as well.
+
+So the purpose of this application is to take course(s) and recycle/repurpose its content, specifically its transcripts and additional resources files if there are any. This includes any project(s) source code, pdfs, databases, etc. Essentially, we're going to gather all files that aren't videos and audio (because those will be transcribed anyways) and make something new. This can be, but not limited to, AI/ML-generated projects, templates, documentation, quizzes and exams, walkthrough tutorials, podcasts, etc.
+
+To process these files, we will be useing Claude skills and subagents via the Claude Agent SDK in JS/TS.
+
+The skills/file processors we have thus far:
+
+Databases: Including Spreadsheets
+
+We are going to use the db-identify to identify the database/spreadsheet and pass that information to db-router and db-router will router that file to the correct script/application to convert to a text-compatible version such as a CSV file.
+
+PDFs: 
+
+I think we can get away with a PDF reading library (Python-based) that simply reads the text of the PDF without any AI/ML model, at least if we can get away with it. Has yet to be implmented. There is a pdf skill I have that we can attempt to use, but it hasn't been tested.
+
+Images:
+
+Same here, if we could use a OCR library in Python to read the image and have Claude fill in the blanks, text correction (if necessary), then I think its fine. Has yet to be implmented.
+
+HTML Pages: 
+
+We have the html2markdown skill that we can test to convert rendered text to markdown. I think it uses pandoc, but I'm not sure.
+
+Archives: .zip, .rar, .7z, 7zip, etc.
+
+We have the unrar skill that uses 7zip since it will decompress both rars and zips and pretty much everyting else.
+
+
+Everything else, as far as I know, will already be in text form and can just be read directory.
+
+
+Phase 1: File scanning, indentifying, and validation with workers.
+
+This will be a CLI-based application, again, this will be using Bun with Typescript. Here are the arguments we will need:
+
+-i/--input (Required): Input directory that will contain the course/project. 
+
+Questions: Is there a way so user can use one argument for input for a root directory that has many projects/courses or a single project/course, or will user need to create 2 arguments, one for each type?
+
+-sw/--scanningworkers (Optional): Number of file scanning workers, default is 1 worker if user omits this argument.
+
+-w/--workers (Optional): Number of workers that process the files for identifying and processing. Workers will pull from a queue in async to first identify what type a file is (via skill), then identify will route said file (1 worker per file) to the correct processor for conversion and if its text-based (txt, .md, .csv, etc.), file immediately goes into the processing queue. If it is a database, identify will route the db/spreadsheet to the db-router which will take aother step to identify what type of db it is which will then be router to the correct conversion script/application. 
+
+Questions: I can't help but think that there should be one router skill thats handling all the file identification and not a separate database routing skill. I also think should be a validation skill that uses Claude to verify that a given file is text readable, if it is, its ready to be sent to the processing queue, if not, then identify what type of file it is, serach for compatible skill(s) for processing. Actually I think all of this (validation/verification) should be part of the identify skill.
+
+What happens when there is a file type we don't have handling for (skill(s)/script/application(s))? We need to log that in an error file of some sort, I dont think we need to stop processing because of it, but we also need to show warning to the console as well as log it.
+
+Where is the logging stored? Is it read on each run on said course/project? We can brainstorm on how we're going to handle that.
+
+-o/--output (Optional): User can set absolute file path on where they want the generated assets to go. If ommitted (which it will be most of the time), output folder will be stored in the same folder as the course/project folder.
+
+To clarify, lets say we have a course named 'C++ for Beginners', there is a 'CODE' folder that holds the course additional resources such as project source code (C++ source code in this instance). So the file directory may look something like the following:
+
+<Input Directory> (multiple course/project elected by user on the command line)
+	C++ for Beginners
+		class01.srt
+		class02.srt
+		CODE
+			Project01
+				car.hpp
+				car.cpp
+				car.sln
+				car.lib
+			Project02
+				dog.hpp
+				dog.cpp
+				dog.sln
+			etc...
+	TypeScript for Dummies
+		etc...
+		
+Our Claude Agent SDK-based application is going to gather up all .srts and everything in the CODE directory (again we're going to use everything for resynthesis minus the video and audio files). Once those files are identified and validated, we're going to place them in a directory called '__cc_validated_files'. This directory will be created in the CODE folder (CODE folder will also be created if it doesn't already exist). 
+
+-ccg/--ClaudeCodeGenerated (Required): This is the type of content you want generated, for example, if user submits "SOP walkthrough" for this argument, the Claude Agent SDK will synthesize SOP walkthrough(s) for every project, real-world application, etc., for the validated files that are discovered. If user says something like "Podcast" then, Clade Agent SDK, will create a podcast based on the validated files. There will much more generated workflows that will be added to the future. Btw the desired synthesized content MUST have a skill that lays out how to be generated, if one isn't available, then an error is raised. This is validated before anything file scanning, validation, and conversion/processing is done to save on token and useage limits.
+
+
+Phase 2: User Interface
+
+We will be using OpenTUI for our user Interface
+
+Claude Code will be handling the UI as long as it uses spinners for processing icons, progress bars, and warning and error file and console logging.
+
+Error logging (file) will shall be placed in the '__cc_validated_files' folder (error.log)
+
+Phase 3: TBD
+
+I know there's a lot I've overlooked, lets iron those things out first before we even start coding. Lets make sure our skills are on par with our needs first.

@@ -1,0 +1,70 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build output
+dist/
+build/
+out/
+*.tgz
+*.tsbuildinfo
+
+# Bun
+bun.lockb
+
+# Environment
+.env
+.env.local
+.env.*.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+logs/
+report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+
+# Test/Coverage
+coverage/
+*.lcov
+.nyc_output/
+
+# Caches
+.eslintcache
+.cache
+
+# Generated output directories (course processing)
+__cc_validated_files/
+__ccg_*/
+error_*.log
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+*.so
+.venv/
+venv/
+ENV/
+
+# Config files (may contain local paths)
+.cckrc.json
+.cckrc
+ccke.config.json
+
+# Test courses (local testing data)
+test-courses/
