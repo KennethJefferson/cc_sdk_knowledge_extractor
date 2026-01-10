@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-CCKnowledgeExtractor is a Bun/TypeScript CLI application that extracts course content (transcripts, documents, code, databases, images) and generates new educational content (quizzes, exams, summaries) using Python skills.
+CCKnowledgeExtractor is a Bun/TypeScript CLI application that extracts course content (transcripts, documents, code, databases, images) and generates new educational content (quizzes, exams, summaries, SOPs, projects) using Python skills.
 
 ## Tech Stack
 
@@ -50,6 +50,9 @@ skills/               # Python skill implementations
   archive-extractor/  # Archive unpacking
   quiz-generator/     # Quiz/exam generation
   summary-generator/  # Documentation generation
+  sop-generator/      # Standard Operating Procedures
+  project-maker/      # Project synthesis from transcripts
+  ccg-github-sync/    # GitHub repo creation and sync
   pdf/, docx/, pptx/  # Document processing
   db-*/               # Database extraction
 ```
@@ -77,8 +80,17 @@ skills/               # Python skill implementations
 ## Commands
 
 ```bash
-# Run the CLI
+# Run the CLI with single generator
 bun run src/index.ts -i <input> -ccg <type>
+
+# Run with multiple generators
+bun run src/index.ts -i <input> -ccg Exam,Project,SOP
+
+# Run all generators
+bun run src/index.ts -i <input> -ccg all
+
+# With GitHub sync (auto-creates repos for generated assets)
+bun run src/index.ts -i <input> -ccg Project --github-sync=true
 
 # Development with watch
 bun run dev -- -i ./test-courses -ccg Exam --dry-run

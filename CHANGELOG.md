@@ -9,6 +9,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Multi-generator support** - Run multiple generators in one command
+  - Comma-separated types: `-ccg Exam,Project,SOP`
+  - `all` shorthand: `-ccg all` runs all generators
+  - Each generator outputs to its own `__ccg_{Type}/` directory
+
+- **GitHub sync** - Auto-push generated assets to GitHub repositories
+  - New CLI flag: `--github-sync=true|false`
+  - Creates one repository per generated asset
+  - Repository naming: `ccg_{Type}_{SynthesizedName}`
+  - Auto-generates .gitignore based on detected tech stack
+  - Pushes new commit if repository already exists
+  - Continues with warning on sync failure
+  - Summary of sync results at end of run
+
+- `project-maker` skill - Synthesize complete projects from course transcripts
+  - Activation phrases: `Project`, `project`, `make`, `synthesize`
+  - Discovers teachable projects from transcript content
+  - Generates full project scaffolding with README, source files
+  - Stopwords filter prevents duplicate words in project names
+
+- `ccg-github-sync` skill - Push generated assets to GitHub
+  - Invoked automatically when `--github-sync=true`
+  - Supports Rust, Python, JavaScript, Go, Java, C# .gitignore templates
+  - Uses `gh` CLI for repository operations
+
 - `sop-generator` skill - Generate Standard Operating Procedures from course content
   - Activation phrases: `SOP`, `sop`, `procedure`, `procedures`, `standard-operating-procedure`
   - Outputs: README index, individual SOP files, quick reference checklists, glossary

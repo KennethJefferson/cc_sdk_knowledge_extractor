@@ -3,7 +3,7 @@
 ## Command Line Interface
 
 ```
-ccke -i <input> -ccg <type> [options]
+ccke -i <input> -ccg <types> [options]
 ```
 
 ### Required Arguments
@@ -11,12 +11,13 @@ ccke -i <input> -ccg <type> [options]
 | Argument | Description |
 |----------|-------------|
 | `-i, --input <dir>` | Root directory containing course folders |
-| `-ccg, --ClaudeCodeGenerated <type>` | Content type to generate |
+| `-ccg, --ClaudeCodeGenerated <types>` | Content types to generate (comma-separated or `all`) |
 
 ### Optional Arguments
 
 | Argument | Default | Description |
 |----------|---------|-------------|
+| `--github-sync <bool>` | false | Auto-sync generated assets to GitHub (true/false) |
 | `-sw, --scanningworkers <n>` | 1 | Number of parallel scanning workers |
 | `-w, --workers <n>` | 1 | Number of parallel processing workers |
 | `-o, --output <dir>` | (auto) | Override output directory |
@@ -30,6 +31,9 @@ ccke -i <input> -ccg <type> [options]
 |------|---------|-------------|
 | Exam | exam, quiz | Generate quiz with multiple choice, short answer, T/F |
 | Summary | summary, docs, documentation | Generate README, glossary, study guide |
+| SOP | sop, procedure, procedures | Generate Standard Operating Procedures |
+| Project | project, make, synthesize | Synthesize complete project from transcripts |
+| all | - | Run all generators |
 
 ## Examples
 
@@ -42,6 +46,37 @@ bun run src/index.ts -i ./courses -ccg Exam
 # Generate documentation summaries
 bun run src/index.ts -i ./courses -ccg Summary
 ```
+
+### Multiple Generators
+
+```bash
+# Generate exams and projects in one run
+bun run src/index.ts -i ./courses -ccg Exam,Project
+
+# Generate all content types
+bun run src/index.ts -i ./courses -ccg all
+
+# Generate exams, SOPs, and summaries
+bun run src/index.ts -i ./courses -ccg Exam,SOP,Summary
+```
+
+### GitHub Sync
+
+```bash
+# Generate and push to GitHub
+bun run src/index.ts -i ./courses -ccg Project --github-sync=true
+
+# Multiple generators with GitHub sync
+bun run src/index.ts -i ./courses -ccg Exam,Project,SOP --github-sync=true
+```
+
+**Prerequisites for GitHub sync:**
+- GitHub CLI installed (`gh`)
+- Authenticated: `gh auth login`
+
+**Repository naming:** `ccg_{Type}_{SynthesizedName}`
+- Example: `ccg_Project_RustPropertyManager`
+- All repos are created as public
 
 ### Parallel Processing
 
@@ -144,10 +179,19 @@ For each course, the tool creates:
 │   ├── lesson1.srt                 # Text files copied as-is
 │   ├── project1_main.cpp           # Nested files flattened
 │   └── resources_notes.md
-├── __ccg_<ContentType>/            # Generated content
-│   ├── quiz.md                     # (for Exam)
-│   ├── answer_key.md
-│   └── README.md                   # (for Summary)
+├── __ccg_Exam/                     # Generated quizzes
+│   ├── quiz.md
+│   └── answer_key.md
+├── __ccg_Summary/                  # Generated documentation
+│   └── README.md
+├── __ccg_Sop/                      # Generated SOPs
+│   ├── README.md
+│   └── SOP_*.md
+├── __ccg_Project/                  # Generated projects
+│   └── Project_<Name>/
+│       ├── README.md
+│       ├── src/
+│       └── ...
 └── error_YYYYMMDD_HHMMSS.log       # Error/warning log
 ```
 
@@ -157,7 +201,8 @@ For each course, the tool creates:
 2. **File Scanning** - Recursively find all processable files
 3. **File Routing** - Determine processor for each file type
 4. **Processing** - Extract text content via skills
-5. **Content Generation** - Generate quiz/summary from validated files
+5. **Content Generation** - Generate content for each requested type
+6. **GitHub Sync** - Push to GitHub if `--github-sync=true`
 
 ## Exit Codes
 
@@ -178,6 +223,12 @@ Check that Python is installed and accessible. Some skills require additional de
 - `image-ocr`: Tesseract OCR, Pillow
 - `archive-extractor`: 7-Zip
 - `html2markdown`: Pandoc
+
+### GitHub sync errors
+
+- Ensure GitHub CLI is installed: `gh --version`
+- Ensure you're authenticated: `gh auth status`
+- Check network connectivity
 
 ### Permission errors
 

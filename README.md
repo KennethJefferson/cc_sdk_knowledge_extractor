@@ -1,13 +1,14 @@
 # CCKnowledgeExtractor
 
-A Bun/TypeScript CLI application for extracting and repurposing educational course content. Processes transcripts, documents, code, databases, and images using Python skills, then generates new content (quizzes, exams, summaries) via Claude Agent SDK.
+A Bun/TypeScript CLI application for extracting and repurposing educational course content. Processes transcripts, documents, code, databases, and images using Python skills, then generates new content (quizzes, exams, summaries, SOPs, projects) via Claude Agent SDK.
 
 ## Features
 
 - **Multi-course batch processing** - Process entire course libraries at once
+- **Multiple generators in one run** - Comma-separated types: `-ccg Exam,Project,SOP`
+- **GitHub sync** - Auto-push generated assets to GitHub repos
 - **Parallel worker pools** - Configurable concurrency for scanning and processing
 - **Intelligent file routing** - Magic byte detection with extension fallback
-- **Multiple content generators** - Quiz/Exam, Summary/Documentation
 - **Progress visualization** - Animated spinners and progress bars
 - **Dry-run mode** - Preview changes without modifying files
 - **Config file support** - Project-level defaults via `.cckrc.json`
@@ -16,6 +17,7 @@ A Bun/TypeScript CLI application for extracting and repurposing educational cour
 
 - [Bun](https://bun.sh) v1.0+
 - Python 3.8+
+- GitHub CLI (`gh`) for GitHub sync feature
 - External tools (optional):
   - Tesseract OCR (for image text extraction)
   - 7-Zip (for archive extraction)
@@ -38,8 +40,14 @@ bun install
 # Generate a quiz from course content
 bun run src/index.ts -i ./my-courses -ccg Exam
 
-# Generate documentation summaries
-bun run src/index.ts -i ./my-courses -ccg Summary
+# Generate multiple content types at once
+bun run src/index.ts -i ./my-courses -ccg Exam,Project,SOP
+
+# Generate all content types
+bun run src/index.ts -i ./my-courses -ccg all
+
+# With GitHub sync (creates repos for each generated asset)
+bun run src/index.ts -i ./my-courses -ccg Project --github-sync=true
 
 # Preview what would be processed (dry-run)
 bun run src/index.ts -i ./my-courses -ccg Exam --dry-run
@@ -79,15 +87,30 @@ bun run src/index.ts -i ./my-courses -ccg Exam -v
     ├── __ccg_Exam/               # Generated quiz content
     │   ├── quiz.md
     │   └── answer_key.md
+    ├── __ccg_Project/            # Generated project
+    │   └── Project_<Name>/
+    ├── __ccg_Sop/                # Generated SOPs
+    │   └── README.md
     └── error_20260109_143022.log # Processing errors
 ```
 
 ## Content Generators
 
-| Type | Skill | Output |
-|------|-------|--------|
-| Exam, Quiz | quiz-generator | Multiple choice, short answer, true/false questions |
-| Summary, Docs | summary-generator | README, glossary, study guide, topic files |
+| Type | Aliases | Output |
+|------|---------|--------|
+| Exam | exam, quiz | Multiple choice, short answer, true/false questions |
+| Summary | summary, docs | README, glossary, study guide, topic files |
+| SOP | sop, procedure | Standard Operating Procedures with checklists |
+| Project | project, make | Complete project scaffolding from transcripts |
+
+## GitHub Sync
+
+When `--github-sync=true` is specified, each generated asset is pushed to its own GitHub repository:
+
+- **Naming**: `ccg_{Type}_{SynthesizedName}` (e.g., `ccg_Project_RustPropertyManager`)
+- **Visibility**: Public
+- **Description**: Auto-generated from asset metadata
+- **Prerequisites**: GitHub CLI authenticated (`gh auth login`)
 
 ## License
 
