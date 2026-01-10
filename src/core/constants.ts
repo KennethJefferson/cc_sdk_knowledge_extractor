@@ -95,6 +95,9 @@ export const GENERATOR_SKILLS: Record<string, string> = {
   // tutorial: "tutorial-generator",
 };
 
+// All generator types for 'all' shorthand (canonical names only, no aliases)
+export const ALL_GENERATOR_TYPES = ["exam", "summary", "sop", "project"];
+
 // Output directory names
 export const OUTPUT_DIRS = {
   validatedFiles: "__cc_validated_files",

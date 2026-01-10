@@ -4,16 +4,24 @@ export interface CLIArguments {
   scanningWorkers: number;
   workers: number;
   output?: string;
-  claudeCodeGenerated: string;
+  claudeCodeGenerated: string;  // Comma-separated types (e.g., "Exam,Project,SOP")
+  githubSync: boolean;          // Auto-sync generated assets to GitHub
   verbose: boolean;
   dryRun: boolean;
   initConfig: boolean;
 }
 
+// Generator configuration
+export interface GeneratorConfig {
+  type: string;      // Original type name (e.g., "Exam", "Project")
+  skill: string;     // Skill name (e.g., "quiz-generator", "project-maker")
+}
+
 export interface ValidatedCLIArguments extends CLIArguments {
   resolvedInput: string;
   resolvedOutput?: string;
-  targetSkill: string;
+  targetSkill: string;           // Primary skill (first in list, for backwards compat)
+  generators: GeneratorConfig[]; // All generators to run
 }
 
 // File Types
@@ -178,4 +186,21 @@ export interface LogEntry {
   message: string;
   file?: string;
   context?: Record<string, unknown>;
+}
+
+// GitHub Sync Types
+export interface GitHubSyncResult {
+  success: boolean;
+  repoName: string;
+  repoUrl?: string;
+  action?: "created" | "updated";
+  error?: string;
+}
+
+export interface GitHubSyncSummary {
+  syncedAt: Date;
+  total: number;
+  successful: number;
+  failed: number;
+  results: GitHubSyncResult[];
 }

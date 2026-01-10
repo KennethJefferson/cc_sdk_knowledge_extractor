@@ -1,8 +1,8 @@
 import { Command } from "commander";
 import { resolve, isAbsolute } from "node:path";
 import { existsSync, statSync, readdirSync } from "node:fs";
-import type { CLIArguments, ValidatedCLIArguments } from "../types/index.ts";
-import { GENERATOR_SKILLS, ERROR_CODES } from "../core/constants.ts";
+import type { CLIArguments, ValidatedCLIArguments, GeneratorConfig } from "../types/index.ts";
+import { GENERATOR_SKILLS, ALL_GENERATOR_TYPES, ERROR_CODES } from "../core/constants.ts";
 
 export function parseArgs(): CLIArguments {
   const program = new Command();
@@ -12,7 +12,8 @@ export function parseArgs(): CLIArguments {
     .description("CCKnowledgeExtractor - Extract course content and generate quizzes/exams")
     .version("0.1.0")
     .option("-i, --input <dir>", "Root directory containing courses")
-    .option("-ccg, --ClaudeCodeGenerated <type>", "Content type to generate (e.g., 'Exam')")
+    .option("-ccg, --ClaudeCodeGenerated <types>", "Content types to generate, comma-separated (e.g., 'Exam,Project,SOP' or 'all')")
+    .option("--github-sync <boolean>", "Auto-sync generated assets to GitHub (true/false)", "false")
     .option("-sw, --scanningworkers <n>", "Number of scanning workers", "1")
     .option("-w, --workers <n>", "Number of processing workers", "1")
     .option("-o, --output <dir>", "Output directory override")
@@ -24,9 +25,14 @@ export function parseArgs(): CLIArguments {
 
   const opts = program.opts();
 
+  // Parse github-sync as boolean
+  const githubSyncValue = (opts.githubSync as string).toLowerCase();
+  const githubSync = githubSyncValue === "true" || githubSyncValue === "1" || githubSyncValue === "yes";
+
   return {
     input: (opts.input as string) ?? "",
     claudeCodeGenerated: (opts.ClaudeCodeGenerated as string) ?? "",
+    githubSync,
     scanningWorkers: parseInt(opts.scanningworkers as string, 10),
     workers: parseInt(opts.workers as string, 10),
     output: opts.output as string | undefined,
@@ -54,6 +60,7 @@ export function validateArgs(args: CLIArguments): ValidationResult {
         ...args,
         resolvedInput: args.input ? resolve(process.cwd(), args.input) : process.cwd(),
         targetSkill: "",
+        generators: [],
       },
       warnings,
     };
@@ -76,7 +83,7 @@ export function validateArgs(args: CLIArguments): ValidationResult {
       success: false,
       error: {
         code: ERROR_CODES.SKILL_NOT_FOUND,
-        message: "Missing required argument: -ccg, --ClaudeCodeGenerated <type>",
+        message: "Missing required argument: -ccg, --ClaudeCodeGenerated <types>",
       },
       warnings,
     };
@@ -120,21 +127,55 @@ export function validateArgs(args: CLIArguments): ValidationResult {
     );
   }
 
-  // Validate -ccg argument (must have corresponding skill)
-  const ccgNormalized = args.claudeCodeGenerated.toLowerCase().trim();
-  const targetSkill = GENERATOR_SKILLS[ccgNormalized];
+  // Parse comma-separated generator types
+  const generators: GeneratorConfig[] = [];
+  const ccgInput = args.claudeCodeGenerated.toLowerCase().trim();
 
-  if (!targetSkill) {
+  // Handle 'all' shorthand
+  const typesToProcess = ccgInput === "all" 
+    ? ALL_GENERATOR_TYPES 
+    : ccgInput.split(",").map(t => t.trim()).filter(t => t.length > 0);
+
+  // Validate each type and build generators array
+  const invalidTypes: string[] = [];
+  for (const type of typesToProcess) {
+    const skill = GENERATOR_SKILLS[type];
+    if (skill) {
+      // Avoid duplicates (same skill from different aliases)
+      const alreadyAdded = generators.some(g => g.skill === skill);
+      if (!alreadyAdded) {
+        generators.push({ type: type.charAt(0).toUpperCase() + type.slice(1), skill });
+      }
+    } else {
+      invalidTypes.push(type);
+    }
+  }
+
+  if (invalidTypes.length > 0) {
     const validTypes = Object.keys(GENERATOR_SKILLS).join(", ");
     return {
       success: false,
       error: {
         code: ERROR_CODES.SKILL_NOT_FOUND,
-        message: `No generator skill found for content type '${args.claudeCodeGenerated}'. Valid types: ${validTypes}`,
+        message: `Invalid generator type(s): '${invalidTypes.join(", ")}'. Valid types: ${validTypes}, all`,
       },
       warnings,
     };
   }
+
+  if (generators.length === 0) {
+    return {
+      success: false,
+      error: {
+        code: ERROR_CODES.SKILL_NOT_FOUND,
+        message: "No valid generator types specified",
+      },
+      warnings,
+    };
+  }
+
+  // First generator's skill is the primary (for backwards compatibility)
+  const targetSkill = generators[0]!.skill;
 
   // Resolve output path if provided
   let resolvedOutput: string | undefined;
@@ -150,6 +191,11 @@ export function validateArgs(args: CLIArguments): ValidationResult {
     warnings.push(`Processing workers clamped to valid range (1-16): was ${args.workers}`);
   }
 
+  // Note about github sync
+  if (args.githubSync) {
+    warnings.push("GitHub sync enabled: generated assets will be pushed to GitHub after creation");
+  }
+
   return {
     success: true,
     args: {
@@ -159,6 +205,7 @@ export function validateArgs(args: CLIArguments): ValidationResult {
       resolvedInput,
       resolvedOutput,
       targetSkill,
+      generators,
     },
     warnings,
   };

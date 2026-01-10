@@ -4,7 +4,14 @@ import type {
   SkillInvocationConfig,
   SkillInvocationResult,
   ProcessingError,
+  GitHubSyncResult,
 } from "../types/index.ts";
+
+export interface GitHubSyncConfig {
+  assetPath: string;
+  assetType: string;
+  discoveryPath: string;
+}
 
 // Note: The Claude Agent SDK is used for complex AI-driven tasks.
 // For simple skill invocations (Python scripts), we use direct subprocess calls
@@ -216,5 +223,52 @@ export class SkillInvoker {
       detectionMethod: (output.detection_method as string) ?? "none",
       error: output.error as string | undefined,
     };
+  }
+
+  /**
+   * Invoke the GitHub sync skill to push generated assets to GitHub.
+   */
+  async invokeGitHubSync(config: GitHubSyncConfig): Promise<GitHubSyncResult> {
+    const scriptPath = resolve(
+      this.skillsDir,
+      "ccg-github-sync",
+      "scripts",
+      "github_sync.py"
+    );
+
+    const args = [
+      config.assetPath,
+      "--type", config.assetType,
+      "--discovery", config.discoveryPath,
+      "--verbose",
+      "--json",
+    ];
+
+    try {
+      const result = await this.runPythonScript(scriptPath, args, 60000);
+
+      if (result.success && result.output) {
+        const output = result.output as Record<string, unknown>;
+        return {
+          success: output.success as boolean ?? false,
+          repoName: output.repo_name as string ?? "",
+          repoUrl: output.repo_url as string | undefined,
+          action: output.action as "created" | "updated" | undefined,
+          error: output.error as string | undefined,
+        };
+      }
+
+      return {
+        success: false,
+        repoName: `ccg_${config.assetType}_Unknown`,
+        error: result.error?.message ?? "GitHub sync failed",
+      };
+    } catch (error) {
+      return {
+        success: false,
+        repoName: `ccg_${config.assetType}_Unknown`,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
   }
 }

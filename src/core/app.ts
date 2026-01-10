@@ -5,7 +5,10 @@ import type {
   ProcessingResult,
   AppResult,
   QueueStats,
+  GitHubSyncResult,
+  GeneratorConfig,
 } from "../types/index.ts";
+import { join } from "node:path";
 import { CourseDetector } from "../scanner/course-detector.ts";
 import { FileRouter } from "../routing/file-router.ts";
 import { FileProcessor } from "../processors/file-processor.ts";
@@ -104,6 +107,11 @@ export class App {
 
     // Print final summary
     this.printFinalSummary(totalStats, startTime, endTime);
+
+    // Print GitHub sync summary if sync was enabled
+    if (this.args.githubSync && !this.dryRun) {
+      this.printGitHubSyncSummary();
+    }
 
     return {
       success: totalStats.failed === 0,
@@ -251,23 +259,81 @@ export class App {
     };
   }
 
-  private async generateContent(course: Course): Promise<void> {
-    const spinner = new Spinner();
-    spinner.start(`Generating ${this.args.claudeCodeGenerated} for ${course.name}...`);
+  private syncResults: GitHubSyncResult[] = [];
 
-    const result = await this.skillInvoker.invokeScript({
-      skillName: this.args.targetSkill,
-      prompt: "",
-      filePath: course.validatedFilesPath,
-      outputPath: course.generatedPath,
-      workingDirectory: this.projectRoot,
+  private async generateContent(course: Course): Promise<void> {
+    const generators = this.args.generators;
+
+    for (const generator of generators) {
+      const spinner = new Spinner();
+      spinner.start(`Generating ${generator.type} for ${course.name}...`);
+
+      // Each generator gets its own output directory
+      const generatorOutputPath = join(course.codePath, `__ccg_${generator.type}`);
+
+      const result = await this.skillInvoker.invokeScript({
+        skillName: generator.skill,
+        prompt: "",
+        filePath: course.validatedFilesPath,
+        outputPath: generatorOutputPath,
+        workingDirectory: this.projectRoot,
+      });
+
+      if (result.success) {
+        spinner.success(`Generated ${generator.type} for ${course.name}`);
+
+        // GitHub sync if enabled
+        if (this.args.githubSync) {
+          await this.syncToGitHub(course, generator);
+        }
+      } else {
+        spinner.fail(`Failed to generate ${generator.type}: ${result.error?.message}`);
+      }
+    }
+  }
+
+  private async syncToGitHub(course: Course, generator: GeneratorConfig): Promise<void> {
+    const assetPath = join(course.codePath, `__ccg_${generator.type}`);
+    const discoveryPath = join(assetPath, "discovery.json");
+
+    const result = await this.skillInvoker.invokeGitHubSync({
+      assetPath,
+      assetType: generator.type,
+      discoveryPath,
     });
 
-    if (result.success) {
-      spinner.success(`Generated ${this.args.claudeCodeGenerated} for ${course.name}`);
-    } else {
-      spinner.fail(`Failed to generate content: ${result.error?.message}`);
+    this.syncResults.push(result);
+
+    if (!result.success) {
+      logger.warn(`  GitHub sync failed for ${generator.type}: ${result.error}`);
     }
+  }
+
+  private printGitHubSyncSummary(): void {
+    if (this.syncResults.length === 0) return;
+
+    const successful = this.syncResults.filter(r => r.success);
+    const failed = this.syncResults.filter(r => !r.success);
+
+    console.log("\n" + "=".repeat(50));
+    console.log("GitHub Sync Summary");
+    console.log("=".repeat(50));
+    console.log(`  Synced:  ${successful.length}`);
+    console.log(`  Failed:  ${failed.length}`);
+    console.log("");
+
+    for (const result of successful) {
+      console.log(`  > ${result.repoName}`);
+      if (result.repoUrl) {
+        console.log(`    ${result.repoUrl}`);
+      }
+    }
+
+    for (const result of failed) {
+      console.log(`  x ${result.repoName} (${result.error})`);
+    }
+
+    console.log("=".repeat(50));
   }
 
   private printFinalSummary(
