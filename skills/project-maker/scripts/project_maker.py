@@ -118,14 +118,30 @@ class SRTParser:
 class ContentAnalyzer:
     """Analyze content to identify projects and extract information."""
 
-    # Project start indicators
-    PROJECT_START_PATTERNS = [
-        r"let's build\s+(?:a|an|the)?\s*(.+?)(?:\.|,|!|$)",
-        r"we(?:'ll| will) create\s+(?:a|an|the)?\s*(.+?)(?:\.|,|!|$)",
-        r"start(?:ing)?\s+(?:a|an|the)?\s*new project\s*(?:called|named)?\s*(.+?)(?:\.|,|!|$)",
-        r"create\s+(?:a|an|the)?\s*(.+?)\s*(?:application|app|project|system)",
-        r"building\s+(?:a|an|the)?\s*(.+?)\s*(?:from scratch|step by step)",
-        r"implement(?:ing)?\s+(?:a|an|the)?\s*(.+?)\s*(?:feature|system|module)",
+    # Project name extraction patterns (ordered by reliability)
+    # These patterns look for explicit project names, not conversational text
+    PROJECT_NAME_PATTERNS = [
+        # CLI initialization commands (most reliable)
+        r"cargo\s+new\s+([a-z][a-z0-9_-]+)",
+        r"npm\s+(?:init|create)\s+([a-z][a-z0-9_-]+)",
+        r"npx\s+create-\w+-app\s+([a-z][a-z0-9_-]+)",
+        r"django-admin\s+startproject\s+([a-z][a-z0-9_]+)",
+        r"rails\s+new\s+([a-z][a-z0-9_-]+)",
+        r"dotnet\s+new\s+\w+\s+-n\s+([A-Za-z][A-Za-z0-9_]+)",
+
+        # Explicit project naming
+        r"project\s*(?:named?|called?)\s*[\"']?([A-Z][A-Za-z0-9_\s]+?)[\"']?(?:\.|,|!|\s|$)",
+        r"(?:the|our|this)\s+([A-Z][A-Za-z]+(?:\s+[A-Z][A-Za-z]+){0,3})\s+(?:project|application|app|system)",
+
+        # Title-case application names (2-4 words)
+        r"\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3})\s+(?:Application|App|System|Manager|Portal|Dashboard)\b",
+    ]
+
+    # Patterns that indicate project boundaries (for multi-project courses)
+    PROJECT_BOUNDARY_PATTERNS = [
+        r"project\s*[#]?\s*(\d+)\s*[:\-]",
+        r"(?:first|second|third|next)\s+project",
+        r"new\s+project\s*[:\-]",
     ]
 
     # Framework/language detection
@@ -275,16 +291,50 @@ class ContentAnalyzer:
         return blocks
 
     def _detect_projects(self, content: str, content_lower: str) -> List[Dict[str, str]]:
-        """Detect project mentions in content."""
+        """Detect explicit project names in content."""
         projects = []
+        seen_names = set()
 
-        for pattern in self.PROJECT_START_PATTERNS:
-            for match in re.finditer(pattern, content_lower, re.IGNORECASE):
-                project_name = match.group(1).strip() if match.groups() else ""
-                if project_name and len(project_name) > 3 and len(project_name) < 100:
+        # Common words that are NOT project names
+        stopwords = {
+            'the', 'this', 'our', 'a', 'an', 'we', 'i', 'you', 'it', 'is', 'are',
+            'and', 'or', 'but', 'for', 'to', 'in', 'on', 'at', 'by', 'from',
+            'new', 'my', 'your', 'app', 'application', 'project', 'system',
+            'file', 'data', 'code', 'src', 'lib', 'main', 'test', 'build',
+            'run', 'start', 'stop', 'create', 'make', 'add', 'get', 'set',
+            'property', 'value', 'name', 'type', 'function', 'class', 'struct',
+        }
+
+        # First, try CLI command patterns (most reliable) - patterns 0-5
+        for pattern in self.PROJECT_NAME_PATTERNS[:6]:
+            for match in re.finditer(pattern, content_lower):
+                name = match.group(1).strip()
+                # Must be at least 4 chars and not a stopword
+                if name and len(name) >= 4 and name.lower() not in stopwords and name.lower() not in seen_names:
+                    # Convert snake_case/kebab-case to Title Case
+                    clean_name = name.replace('_', ' ').replace('-', ' ').title()
+                    seen_names.add(name.lower())
                     projects.append({
-                        'name': project_name.title(),
-                        'context': content[max(0, match.start()-100):match.end()+100],
+                        'name': clean_name,
+                        'context': content[max(0, match.start()-50):match.end()+50],
+                        'source': 'cli_command',
+                        'confidence': 'high',
+                    })
+
+        # Then try explicit naming patterns (on original content for case sensitivity)
+        for pattern in self.PROJECT_NAME_PATTERNS[6:]:
+            for match in re.finditer(pattern, content):
+                name = match.group(1).strip()
+                # Filter out stopwords and short names
+                if name.lower() in stopwords or len(name) < 4:
+                    continue
+                if name and len(name) <= 50 and name.lower() not in seen_names:
+                    seen_names.add(name.lower())
+                    projects.append({
+                        'name': name,
+                        'context': content[max(0, match.start()-50):match.end()+50],
+                        'source': 'explicit_name',
+                        'confidence': 'medium',
                     })
 
         return projects
@@ -1503,7 +1553,7 @@ class ProjectMaker:
         # Aggregate analysis results
         all_tech = set()
         all_features = set()
-        all_projects = []
+        cli_projects = []  # Projects from CLI commands (high confidence)
         all_code = []
         complexity_votes = {'beginner': 0, 'intermediate': 0, 'advanced': 0}
 
@@ -1511,41 +1561,134 @@ class ProjectMaker:
             result = analyzer.analyze(sf.content, sf.name)
             all_tech.update(result['tech_stack'])
             all_features.update(result['features'])
-            all_projects.extend(result['projects'])
+            # Only keep high-confidence projects from CLI commands
+            for proj in result['projects']:
+                if proj.get('confidence') == 'high':
+                    cli_projects.append(proj)
             all_code.extend(result['code_blocks'])
             complexity_votes[result['complexity']] += 1
 
-        # If no specific projects detected, create one from all content
-        if not all_projects:
-            # Try to infer project name from tech stack
-            if 'Rust' in all_tech:
-                name = "Rust Application"
-            elif 'React' in all_tech:
-                name = "React Application"
-            elif 'Python' in all_tech:
-                name = "Python Application"
-            else:
-                name = "Course Project"
-
-            all_projects = [{'name': name, 'context': ''}]
+        # Determine primary tech from file extensions (most reliable)
+        primary_tech = self._determine_primary_tech(all_tech)
 
         # Determine overall complexity
         complexity = max(complexity_votes, key=complexity_votes.get)
 
-        # Create project candidates
+        # Extract project name from course folder path
+        course_name = self._extract_course_name()
+
+        # Strategy: Create ONE comprehensive project per course
+        # Only split if we found multiple distinct CLI-created projects
+        if len(cli_projects) > 1:
+            # Multiple distinct projects found via CLI commands
+            self._log(f"  Found {len(cli_projects)} distinct projects via CLI commands")
+            return self._create_multiple_candidates(
+                cli_projects, primary_tech, all_tech, all_features, all_code, complexity
+            )
+        else:
+            # Single comprehensive project from all content
+            project_name = cli_projects[0]['name'] if cli_projects else course_name
+            return [self._create_single_candidate(
+                project_name, primary_tech, all_tech, all_features, all_code, complexity
+            )]
+
+    def _determine_primary_tech(self, all_tech: set) -> str:
+        """Determine primary technology, prioritizing by file extensions."""
+        # Priority order - languages that define the project type
+        priority = ['Rust', 'Go', 'TypeScript', 'Python', 'JavaScript', 'Java', 'C#', 'C++']
+
+        # Count code files by extension
+        ext_counts = defaultdict(int)
+        for sf in self.source_files:
+            if sf.file_type == 'code':
+                ext_counts[sf.extension] += 1
+
+        # Map extensions to languages
+        ext_to_lang = {
+            '.rs': 'Rust', '.go': 'Go', '.ts': 'TypeScript', '.tsx': 'TypeScript',
+            '.py': 'Python', '.js': 'JavaScript', '.jsx': 'JavaScript',
+            '.java': 'Java', '.cs': 'C#', '.cpp': 'C++', '.c': 'C++'
+        }
+
+        # Find most common code file extension
+        if ext_counts:
+            most_common_ext = max(ext_counts, key=ext_counts.get)
+            if most_common_ext in ext_to_lang:
+                return ext_to_lang[most_common_ext]
+
+        # Fall back to priority order from detected tech
+        for lang in priority:
+            if lang in all_tech:
+                return lang
+
+        return list(all_tech)[0] if all_tech else ''
+
+    def _extract_course_name(self) -> str:
+        """Extract a clean project name from the course folder path."""
+        # Go up from __cc_validated_files to get the course name
+        course_path = self.input_dir
+        if course_path.name == '__cc_validated_files':
+            course_path = course_path.parent  # CODE folder
+        if course_path.name == 'CODE':
+            course_path = course_path.parent  # Course folder
+
+        course_name = course_path.name
+
+        # Clean up the name
+        # Remove common prefixes/suffixes
+        for pattern in [r'^\d+\s*[-_.]\s*', r'\s*[-_]\s*\d+$', r'\s*\(.*\)$']:
+            course_name = re.sub(pattern, '', course_name)
+
+        # Extract key words (skip common words)
+        skip_words = {'with', 'and', 'the', 'a', 'an', 'for', 'to', 'in', 'on', 'of', 'from', 'by'}
+        words = []
+        for word in re.findall(r'[A-Za-z]+', course_name):
+            if word.lower() not in skip_words and len(word) > 1:
+                words.append(word.title())
+
+        if len(words) >= 2:
+            # Take up to 4 meaningful words
+            return ' '.join(words[:4])
+        elif words:
+            return words[0]
+        else:
+            return "Course Project"
+
+    def _create_single_candidate(self, name: str, primary_tech: str, all_tech: set,
+                                  all_features: set, all_code: list, complexity: str) -> ProjectCandidate:
+        """Create a single comprehensive project candidate."""
+        # Generate synthesized name
+        clean_name = re.sub(r'[^a-zA-Z0-9\s]', '', name)
+        words = [w for w in clean_name.split() if w.lower() != primary_tech.lower()][:3]
+        synth_name = f"Project_{primary_tech}{''.join(w.title() for w in words)}"
+        synth_name = synth_name[:50]
+
+        return ProjectCandidate(
+            id="proj_001",
+            name=name,
+            synthesized_name=synth_name,
+            description=f"{name} - A {complexity} level {primary_tech or 'programming'} project",
+            source_files=[sf.name for sf in self.source_files],
+            tech_stack=self._order_tech_stack(primary_tech, all_tech),
+            complexity=complexity,
+            features=list(all_features)[:20],
+            code_snippets=all_code[:10],
+        )
+
+    def _create_multiple_candidates(self, cli_projects: list, primary_tech: str, all_tech: set,
+                                     all_features: set, all_code: list, complexity: str) -> List[ProjectCandidate]:
+        """Create multiple project candidates from CLI-discovered projects."""
         candidates = []
         seen_names = set()
 
-        for i, proj in enumerate(all_projects[:5]):  # Limit to 5 projects
+        for i, proj in enumerate(cli_projects[:3]):  # Limit to 3 projects
             name = proj['name']
             if name.lower() in seen_names:
                 continue
             seen_names.add(name.lower())
 
-            # Generate synthesized name
-            primary_tech = list(all_tech)[0] if all_tech else ''
             clean_name = re.sub(r'[^a-zA-Z0-9\s]', '', name)
-            words = clean_name.split()[:4]
+            words = [w for w in clean_name.split() if w.lower() != primary_tech.lower()][:3]
             synth_name = f"Project_{primary_tech}{''.join(w.title() for w in words)}"
             synth_name = synth_name[:50]
 
@@ -1555,13 +1698,23 @@ class ProjectMaker:
                 synthesized_name=synth_name,
                 description=f"{name} - A {complexity} level {primary_tech or 'programming'} project",
                 source_files=[sf.name for sf in self.source_files],
-                tech_stack=list(all_tech),
+                tech_stack=self._order_tech_stack(primary_tech, all_tech),
                 complexity=complexity,
                 features=list(all_features)[:20],
                 code_snippets=all_code[:10],
             ))
 
         return candidates
+
+    def _order_tech_stack(self, primary_tech: str, all_tech: set) -> List[str]:
+        """Order tech stack with primary tech first."""
+        ordered = []
+        if primary_tech:
+            ordered.append(primary_tech)
+        for tech in sorted(all_tech):
+            if tech != primary_tech:
+                ordered.append(tech)
+        return ordered
 
     def _write_manifest(self):
         """Write discovery.json manifest."""
