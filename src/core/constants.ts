@@ -85,6 +85,11 @@ export const GENERATOR_SKILLS: Record<string, string> = {
   procedure: "sop-generator",
   procedures: "sop-generator",
   "standard-operating-procedure": "sop-generator",
+  project: "project-maker",
+  projects: "project-maker",
+  make: "project-maker",
+  synthesize: "project-maker",
+  "build-project": "project-maker",
   // Future generators can be added here
   // podcast: "podcast-generator",
   // tutorial: "tutorial-generator",
